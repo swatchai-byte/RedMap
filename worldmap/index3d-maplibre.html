@@ -145,35 +145,33 @@ const baseLay = "osm-tiles-layer";
 window.handlePopupClick = function( o, n=0 ) {
   //if (window.map.getLayer(o) || window.map.isSourceLoaded(o)) {
   if (window.map.getLayer(o)) {
+    const lays = window.map.getLayersOrder();
         switch (n) {
         case 0:
-                window.map.moveLayer(o); //Bring on top
-                break;
+            window.map.moveLayer(o); //Bring on top
+            break;
         case 1:
-                window.map.removeLayer(o); //Do: onRemove() to cleanup
-                break;
+            window.map.removeLayer(o); //Do: onRemove() to cleanup
+            break;
         case 2:
-                //if (window.map.isSourceLoaded(o)) {
-                  //alert("Will attempt to addLayer " + o);
-                  //window.map.addLayer( window.map.getSource(o) ); //Err,
-                //}
-                console.log("Dont know how!");
-                break;
+            //Hide layer "o"
+            window.map.moveLayer(o, baseLay);
+            break;
         case 3:
-                let lstate = window.map.getLayer(o);
-                console.log("Layer obj:", lstate);
-                break;
+            let lstate = window.map.getLayer(o);//check-list layers
+            console.log("Layer obj:", lstate);
+            window.alert("Layers: "+ JSON.stringify(lays));
+            break;
         case 4:
-                window.map.moveLayer( baseLay );
-                break;
+            window.map.moveLayer( baseLay );//Hide all
+            break;
         case 5:
-                //move all layer above baseLay
-                const lays = window.map.getLayersOrder();
-                lays.forEach((lay,ix,ar) => {
-                        console.log(lay , ix);
-                        if (lay !== "osm-tiles-layer") window.map.moveLayer( lay );
+            //move all layer above baseLay (show-all)
+            lays.forEach((lay,ix,ar) => {
+                //console.log(lay , ix);
+                if (lay !== baseLay) window.map.moveLayer( lay );
                 });
-                break;
+            break;
         default:
                 //do nothing
                 //alert("Case: " + n);
@@ -189,9 +187,9 @@ var templt_mkrPup = function( p ) {
   //p: layerID
   let html = `<div>
         <div id="popupContent">Overlay controls:</div>
-        <button id="execButton1" type="button" onclick="window.handlePopupClick(${p},0)"><b>Move layer up</b></button><br/>
+        <button id="execButton1" type="button" onclick="window.handlePopupClick(${p},0)"><b>Move to front</b></button><br/>
         <button id="execButton2" type="button" onclick="window.handlePopupClick(${p},1)"><b>Remove layer</b></button></div>
-        <button id="execButton3" type="button" onclick="window.handlePopupClick(${p},2)"><b>Add layer</b></button></div>
+        <button id="execButton3" type="button" onclick="window.handlePopupClick(${p},2)"><b>Hide layer</b></button></div>
         <button id="execButton4" type="button" onclick="window.handlePopupClick(${p},3)"><b>Check layer</b></button></div>
         <button id="execButton5" type="button" onclick="window.handlePopupClick(${p},4)"><b>Hide all</b></button></div>
         <button id="execButton6" type="button" onclick="window.handlePopupClick(${p},5)"><b>Show all</b></button></div>`;
@@ -223,6 +221,10 @@ const bounds = [
 
 //THREE resources
 var materialCache;
+const grid_specs = { grid_draw: true,
+        grid_spec: [100, 10, 0x0000ff, 0x000000],
+        grid_xyh: [50, 50, 0]
+    }
 //var map;//works, but strange!
 
 var do_3dmap = function() {
@@ -396,22 +398,23 @@ var do_3dmap = function() {
               }
 
               if (c.map.featuretype === 'elevatedLineString') {
-                addElevLine(c.map.overlay, c.map.geojson);
+                addElevLine(c.map.overlay, c.map.geojson);//Not available on MapLibre
               }
 
               //--- Three.js handling ---
-              //featuretype: THREE-3d
+              //Requires THREE-3d
+              
               if (c.map.featuretype === 'threeJSModel') {
                         //Ignore most input, and use test code
                         console.log("*** begin threeJSModel");
                         //addThreeJSModel(c.map.overlay, c.map.geojson, c.map.modelOriginLnglat, c.map.modelOriginH, c.map.objXyz, c.map.xy_gridH);
-                        addThreeJSModel(c.map.overlay, c.map.geojson, c.map.modelOriginLnglat, c.map.modelOriginH, c.map.objXyz, c.map.grid_xyh, c.map.grid_spec);
+                        addThreeJSModel(c.map.overlay, c.map.geojson, c.map.modelOriginLnglat, c.map.modelOriginH, c.map.objXyz, c.map.grid_xyh, c.map.grid_specs);
                         console.log("*** done threeJSModel");
                 }
               else if (c.map.featuretype === 'threeJSModelMesh') {
                         console.log("*** threeJSModelMesh");
                         //addThreeJSModelMesh(c.map.overlay, c.map.geojson, c.map.modelOriginLnglat, c.map.modelOriginH, c.map.objXyz, c.map.xy_gridH);
-                        addThreeJSModelMesh(c.map.overlay, c.map.geojson, c.map.modelOriginLnglat, c.map.modelOriginH, c.map.objXyz, c.map.grid_xyh, c.map.grid_spec);
+                        addThreeJSModelMesh(c.map.overlay, c.map.geojson, c.map.modelOriginLnglat, c.map.modelOriginH, c.map.objXyz, c.map.grid_xyh, c.map.grid_specs);
                 }
               else if (c.map.featuretype === 'layerControl') {
                         console.log("*** layerControl body", c.map);
@@ -793,7 +796,7 @@ var do_3dmap = function() {
     });
 
     //Used for test/demo, ignore most of data sent from node-red
-    var addThreeJSModel = function(o, g, lnglat0, h0, objXyz, grid_xyh=[0,0,0], grid_spec=[200,20,0x0000ff,0x000000]) {
+    var addThreeJSModel = function(o, g, lnglat0, h0, objXyz, grid_xyh=[0,0,0], grid_specs=grid_specs) {
                 //Must remove layer and source first, so it can be reuse;
                 if (map.getLayer(o)) map.removeLayer(o);
                 if (map.getSource(o)) map.removeSource(o);
@@ -801,7 +804,7 @@ var do_3dmap = function() {
                 console.log("--- json msg:", g );
                 //console.log("Status of THREE?", THREE);
 
-                let sphere2Layer = new ThreeObjCustomLayer( o, lnglat0, h0, objXyz, null, grid_xyh, grid_spec );
+                let sphere2Layer = new ThreeObjCustomLayer( o, lnglat0, h0, objXyz, null, grid_xyh, grid_specs=grid_specs );
                 console.log("--- sphere2_Layer_model:");
 
                 map.addLayer( sphere2Layer );
@@ -813,11 +816,11 @@ var do_3dmap = function() {
         };
 
     //Use data sent from node-red
-    var addThreeJSModelMesh = function(o, g, lnglat0, h0, objXyz, grid_xyh=[0,0,0], grid_spec=[200,20,0x0000ff,0x000000]) {
+    var addThreeJSModelMesh = function(o, g, lnglat0, h0, objXyz, grid_xyh=[0,0,0], grid_specs=grid_specs) {
                 if (map.getLayer(o)) map.removeLayer(o);
                 if (map.getSource(o)) map.removeSource(o);
 
-                let sphere2LayerMesh = new ThreeObjCustomLayer( o, lnglat0, h0, objXyz, g, grid_xyh, grid_spec );
+                let sphere2LayerMesh = new ThreeObjCustomLayer( o, lnglat0, h0, objXyz, g, grid_xyh, grid_specs=grid_specs );
                 console.log("sphere2Layer_mesh:", g);
 
                 map.addLayer( sphere2LayerMesh );
@@ -914,14 +917,14 @@ class ThreeObjCustomLayer {
         type = "custom";
         renderingMode = "3d";
 
-        constructor(id, oLnglat, oHeight, objXyz, objMesh, grid_xyh, grid_spec) {
+        constructor(id, oLnglat, oHeight, objXyz, objMesh, grid_xyh, grid_specs) {
                 this.id = id;
                 this.originLnglat = oLnglat;
                 this.originH = oHeight || 0;
                 this.objXyz = objXyz || [0,0,0];
                 this.objMesh = objMesh;
                 this.grid_xyh = grid_xyh || [0,0,0];
-                this.grid_spec = grid_spec || [400, 10, 0x0000ff, 0x000000];
+                this.grid_specs = grid_specs;//|| [400, 10, 0x0000ff, 0x000000]
           }
 
         async onAdd(map, gl) {
@@ -1071,12 +1074,19 @@ class ThreeObjCustomLayer {
 
                 //GridHelper: shifted in xyz to reference 3D objects
                 //const grid1 = new THREE.GridHelper(100, 10, 0x0000ff, 0x000000 );
-                const grid1 = new THREE.GridHelper( ...this.grid_spec );
-                grid1.rotateX( Math.PI/2 );//xz-plane grid to horizontal plane
-                //grid1.position.set(50, 50, this.xy_gridH);
-                grid1.position.set( ...this.grid_xyh );
-                this.scene.add( grid1 );
+                /*
+                    const grid_specs = { grid_draw: true,
+                            grid_spec: [100, 10, 0x0000ff, 0x000000],
+                            grid_xyh: [50, 50, 0]
+                        }
+                */
+                if ( this.grid_specs.grid_draw===true ) {
+                    const grid1 = new THREE.GridHelper( ...this.grid_specs.grid_spec );//old uses, [100, 10, 0x0000ff, 0x000000]
+                    grid1.rotateX( Math.PI/2 );//xz-plane grid to horizontal plane
+                    grid1.position.set( ...this.grid_specs.grid_xyh );//grid1.position.set(50, 50, this.xy_gridH);
 
+                    this.scene.add( grid1 );
+                }
 
                 /* --- use the MapLibre GL JS map canvas for three.js
                  this.renderer = new THREE.WebGLRenderer({
