@@ -335,9 +335,14 @@ var do_3dmap = function() {
         connect();
 
 
-        //Add interaction (click markers), OK.
+        //Add interaction (click markers)
         //MapLibre-GL, also has mousemove, etc.
-        //TODO: compute delta x,y,z from oldLngLat (need Veness' geodesy)
+        /*
+            // e.point is the x, y coordinates of the mousemove event relative
+            // to the top-left corner of the map
+            // e.lngLat is the longitude, latitude
+        */
+        //compute delta x,y,z from oldLngLat (need Veness' geodesy) -- done
         map.on('click', (e) => {
                 e.preventDefault();
                 let dist = new maplibregl.LngLat(...oldLngLat).distanceTo(e.lngLat).toFixed(3);
@@ -348,7 +353,7 @@ var do_3dmap = function() {
                 let east = delta12.east.toFixed(3);
                 let down = delta12.down.toFixed(3);
                 //console.log("Delta:", delta12);
-                let mercatorMeter = 0;//MercatorCoordinate.fromLngLat({ lng: 0, lat: 0}, 0);
+                //let mercatorMeter = 0;//MercatorCoordinate.fromLngLat({ lng: 0, lat: 0}, 0);
                 valueMsg.innerHTML = `${e.lngLat.lng.toFixed(5)},${e.lngLat.lat.toFixed(5)}; <b>Dist:</b>${dist}; <b>Delta:</b> N=${north} E=${east} D=${down}`;
                 oldLngLat = [e.lngLat.lng, e.lngLat.lat];
         });
@@ -1081,10 +1086,9 @@ class ThreeObjCustomLayer {
                         }
                 */
                 if ( this.grid_specs.grid_draw===true ) {
-                    const grid1 = new THREE.GridHelper( ...this.grid_specs.grid_spec );//old uses, [100, 10, 0x0000ff, 0x000000]
+                    const grid1 = new THREE.GridHelper( ...this.grid_specs.grid_spec );
                     grid1.rotateX( Math.PI/2 );//xz-plane grid to horizontal plane
-                    grid1.position.set( ...this.grid_specs.grid_xyh );//grid1.position.set(50, 50, this.xy_gridH);
-
+                    grid1.position.set( ...this.grid_specs.grid_xyh );
                     this.scene.add( grid1 );
                 }
 
@@ -1097,7 +1101,7 @@ class ThreeObjCustomLayer {
                  this.renderer.autoClear = false;
                 --- */
 
-                // use map canvas for THREE rendering
+                // Use shared renderer
                 if (!sharedRenderer) {
                         sharedRenderer = new THREE.WebGLRenderer({
                                 canvas: this.map.getCanvas(),
