@@ -7,12 +7,14 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <script src="leaflet/sockjs.min.js"></script>
 
-
-    <script src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
-    <link href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css" rel="stylesheet" />
-
+    <link href="https://unpkg.com/maplibre-gl@6.4.1/dist/maplibre-gl.css" rel="stylesheet" />
+    
     <script type="module">
-        import * as THREE from 'https://unpkg.com/three@0.180.0/build/three.module.min.js';
+        import * as maplibregl from 'https://unpkg.com/maplibre-gl@6.4.1/dist/maplibre-gl.mjs';
+
+        window.maplibregl = maplibregl;
+
+        import * as THREE from 'https://unpkg.com/three@0.185.0/build/three.module.min.js';
         window.THREE = THREE;
         //console.log("winTHREE:",THREE);
 
@@ -50,11 +52,14 @@
         window.Ned = Ned;
         window.Dms = Dms;
 
+        // Tell classic scripts that the modules are ready
+        window.dispatchEvent(new Event('libraries-ready'));
     </script>
 
     <style>
         body { margin:0; padding:0; }
-        #map { position:absolute; top:0; bottom:0; width:100%; }
+        #map { position:absolute; top:0; bottom:0; width:95%; }
+        /*  #map2 { position:absolute; top:0; bottom:0; width:50%; left:50%; }  */
         .custom-info {
                 position: absolute;
                 font-family: sans-serif;
@@ -89,8 +94,11 @@
 
     </style>
 </head>
+
 <body>
 <div id='map'></div>
+<!-- div id='map2'></div -->
+
 <div class="custom-info">
   <div><strong>Title:</strong>&nbsp;<span id="title"></span></div>
   <div><strong>Desc.:</strong>&nbsp;<span id="desc"></span></div>
@@ -103,12 +111,15 @@
 
 
 <script>
-
-
+//Global vars
 // You can also replace this with a custom style if you like.
-// var mbstyle = 'mapbox://styles/mapbox/streets-v10';//OK
+//var mbstyle = 'mapbox://styles/mapbox/streets-v10';//OK
 //var mbstyle = 'mapbox://styles/mapbox/light-v10';//all gray
 //var mbstyle = 'mapbox://styles/mapbox/standard';//not good
+
+window.addEventListener('libraries-ready', () => {
+    console.log("Libraries are ready. You can now use MapLibre, THREE and Geodesy.");
+    // You can now safely use THREE and Geodesy here or in other scripts.
 
 //Beg-mycode
 const titleDiv = document.getElementById('title');
@@ -123,7 +134,6 @@ var pupButton2;// = document.querySelector('#execButton2');
 //Obj data collections
 const mapsStore = {};
 const markersStore = {};
-
 
 //PopUp code
 const markerHeight = 50/2;
@@ -204,7 +214,8 @@ var sceneOrigin = lnglat0;
 
 var oldLngLat = [100,13];
 var threeInitFlag = false;
-const { MercatorCoordinate } = maplibregl;//coord conversion util
+
+//const { MercatorCoordinate } = maplibregl;//coord conversion util
 
 //3dbaseMap config
 var basemap_showIndoor = false;
@@ -225,7 +236,13 @@ const grid_specs = { grid_draw: true,
         grid_spec: [100, 10, 0x0000ff, 0x000000],
         grid_xyh: [50, 50, 0]
     }
-//var map;//works, but strange!
+
+//var map;//also works, but use as is.
+//MapLibre is initialized in do_3dmap.
+
+const maplibregl = window.maplibregl;
+console.log("maplibregl:", maplibregl);
+
 
 var do_3dmap = function() {
     var people = {};
@@ -337,11 +354,9 @@ var do_3dmap = function() {
 
         //Add interaction (click markers)
         //MapLibre-GL, also has mousemove, etc.
-        /*
-            // e.point is the x, y coordinates of the mousemove event relative
-            // to the top-left corner of the map
-            // e.lngLat is the longitude, latitude
-        */
+        // e.point is the x, y coordinates of the mousemove event relative
+        // to the top-left corner of the map
+        // e.lngLat is the longitude, latitude
         //compute delta x,y,z from oldLngLat (need Veness' geodesy) -- done
         map.on('click', (e) => {
                 e.preventDefault();
@@ -413,13 +428,13 @@ var do_3dmap = function() {
                         //Ignore most input, and use test code
                         console.log("*** begin threeJSModel");
                         //addThreeJSModel(c.map.overlay, c.map.geojson, c.map.modelOriginLnglat, c.map.modelOriginH, c.map.objXyz, c.map.xy_gridH);
-                        addThreeJSModel(c.map.overlay, c.map.geojson, c.map.modelOriginLnglat, c.map.modelOriginH, c.map.objXyz, c.map.grid_xyh, c.map.grid_specs);
+                        addThreeJSModel(c.map.overlay, c.map.geojson, c.map.modelOriginLnglat, c.map.modelOriginH, c.map.objXyz, c.map.grid_specs);
                         console.log("*** done threeJSModel");
                 }
               else if (c.map.featuretype === 'threeJSModelMesh') {
                         console.log("*** threeJSModelMesh");
                         //addThreeJSModelMesh(c.map.overlay, c.map.geojson, c.map.modelOriginLnglat, c.map.modelOriginH, c.map.objXyz, c.map.xy_gridH);
-                        addThreeJSModelMesh(c.map.overlay, c.map.geojson, c.map.modelOriginLnglat, c.map.modelOriginH, c.map.objXyz, c.map.grid_xyh, c.map.grid_specs);
+                        addThreeJSModelMesh(c.map.overlay, c.map.geojson, c.map.modelOriginLnglat, c.map.modelOriginH, c.map.objXyz, c.map.grid_specs);
                 }
               else if (c.map.featuretype === 'layerControl') {
                         console.log("*** layerControl body", c.map);
@@ -801,7 +816,7 @@ var do_3dmap = function() {
     });
 
     //Used for test/demo, ignore most of data sent from node-red
-    var addThreeJSModel = function(o, g, lnglat0, h0, objXyz, grid_xyh=[0,0,0], grid_specs=grid_specs) {
+    var addThreeJSModel = function(o, g, lnglat0, h0, objXyz, grid_specs=grid_specs) {
                 //Must remove layer and source first, so it can be reuse;
                 if (map.getLayer(o)) map.removeLayer(o);
                 if (map.getSource(o)) map.removeSource(o);
@@ -809,7 +824,7 @@ var do_3dmap = function() {
                 console.log("--- json msg:", g );
                 //console.log("Status of THREE?", THREE);
 
-                let sphere2Layer = new ThreeObjCustomLayer( o, lnglat0, h0, objXyz, null, grid_xyh, grid_specs=grid_specs );
+                let sphere2Layer = new ThreeObjCustomLayer( o, lnglat0, h0, objXyz, null, grid_specs=grid_specs );
                 console.log("--- sphere2_Layer_model:");
 
                 map.addLayer( sphere2Layer );
@@ -821,11 +836,11 @@ var do_3dmap = function() {
         };
 
     //Use data sent from node-red
-    var addThreeJSModelMesh = function(o, g, lnglat0, h0, objXyz, grid_xyh=[0,0,0], grid_specs=grid_specs) {
+    var addThreeJSModelMesh = function(o, g, lnglat0, h0, objXyz, grid_specs=grid_specs) {
                 if (map.getLayer(o)) map.removeLayer(o);
                 if (map.getSource(o)) map.removeSource(o);
 
-                let sphere2LayerMesh = new ThreeObjCustomLayer( o, lnglat0, h0, objXyz, g, grid_xyh, grid_specs=grid_specs );
+                let sphere2LayerMesh = new ThreeObjCustomLayer( o, lnglat0, h0, objXyz, g, grid_specs=grid_specs );
                 console.log("sphere2Layer_mesh:", g);
 
                 map.addLayer( sphere2LayerMesh );
@@ -922,13 +937,12 @@ class ThreeObjCustomLayer {
         type = "custom";
         renderingMode = "3d";
 
-        constructor(id, oLnglat, oHeight, objXyz, objMesh, grid_xyh, grid_specs) {
+        constructor(id, oLnglat, oHeight, objXyz, objMesh, grid_specs) {
                 this.id = id;
                 this.originLnglat = oLnglat;
                 this.originH = oHeight || 0;
                 this.objXyz = objXyz || [0,0,0];
                 this.objMesh = objMesh;
-                this.grid_xyh = grid_xyh || [0,0,0];
                 this.grid_specs = grid_specs;//|| [400, 10, 0x0000ff, 0x000000]
           }
 
@@ -944,7 +958,7 @@ class ThreeObjCustomLayer {
                 const modelPos = [50, 200, 100];//model units
 
                 //The model/scene? center in Merc coordinates
-                this.center = MercatorCoordinate.fromLngLat(this.originLnglat, this.originH);
+                this.center = maplibregl.MercatorCoordinate.fromLngLat(this.originLnglat, this.originH);
                 console.log("Mercator coord at origin:", this.center);
 
                 const { x, y, z } = this.center;
@@ -1277,7 +1291,9 @@ function road_strip_betw_pnts(p1, p2, width=4) {
   return strip;
 }
 
+})//window.addEventListener()
 
+console.log("End-of-CSscript.");
 /*
 For large scenes, consider:
  One custom layer
@@ -1285,7 +1301,6 @@ For large scenes, consider:
  One THREE scene
  Multiple THREE.Groups
 */
-console.log("End-of-CSscript.");
 </script>
 </body>
 </html>
