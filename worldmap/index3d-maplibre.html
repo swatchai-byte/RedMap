@@ -18,6 +18,17 @@
         window.THREE = THREE;
         //console.log("winTHREE:",THREE);
 
+        /*  -- only after THREE is loaded, and "three" is available.
+        import { LineMaterial } from 'https://unpkg.com/three@0.185.0/examples/jsm/lines/LineMaterial.js';
+        window.LineMaterial = LineMaterial;
+
+        import { Line2 } from 'https://unpkg.com/three@0.185.0/examples/jsm/lines/Line2.js';
+        window.Line2 = Line2;
+
+        import { LineSegments2 } from 'https://unpkg.com/three@0.185.0/examples/jsm/lines/LineSegments2.js';
+        window.LineSegments2 = LineSegments2;
+        */
+
         //Veness Geodesy: LonLat_nv and etc.
         //const { default:LatLon_nv, Ned, Cartesian } = await import('./node_modules/geodesy/latlon-nvector-ellipsoidal.js');
         //Set global {LatLon_nv: LatLon_nv, Ned: Ned, Cartesian: Cartesian };
@@ -197,10 +208,10 @@ var templt_mkrPup = function( p ) {
   //p: layerID
   let html = `<div>
         <div id="popupContent">Overlay controls:</div>
-        <button id="execButton1" type="button" onclick="window.handlePopupClick(${p},0)"><b>Move to front</b></button><br/>
-        <button id="execButton2" type="button" onclick="window.handlePopupClick(${p},1)"><b>Remove layer</b></button></div>
-        <button id="execButton3" type="button" onclick="window.handlePopupClick(${p},2)"><b>Hide layer</b></button></div>
-        <button id="execButton4" type="button" onclick="window.handlePopupClick(${p},3)"><b>Check layer</b></button></div>
+        <button id="execButton1" type="button" onclick="window.handlePopupClick(${p},0)"><b>Move to top</b></button><br/>
+        <button id="execButton2" type="button" onclick="window.handlePopupClick(${p},1)"><b>Remove</b></button></div>
+        <button id="execButton3" type="button" onclick="window.handlePopupClick(${p},2)"><b>Hide</b></button></div>
+        <button id="execButton4" type="button" onclick="window.handlePopupClick(${p},3)"><b>Check layers</b></button></div>
         <button id="execButton5" type="button" onclick="window.handlePopupClick(${p},4)"><b>Hide all</b></button></div>
         <button id="execButton6" type="button" onclick="window.handlePopupClick(${p},5)"><b>Show all</b></button></div>`;
 
@@ -246,33 +257,35 @@ console.log("maplibregl:", maplibregl);
 
 var do_3dmap = function() {
     var people = {};
+    //Set map style
+    const mapStyle = {
+        "version": 8,
+        "sources": {
+            "osm-tiles": {
+                "type": "raster",
+                "tiles": [
+                    "https://a.tile.openstreetmap.org/{z}/{x}/{y}.png",
+                    "https://b.tile.openstreetmap.org/{z}/{x}/{y}.png",
+                    "https://c.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                ],
+                "tileSize": 256
+            }
+        },
+        "layers": [
+            {
+                "id": "osm-tiles-layer",
+                "type": "raster",
+                "source": "osm-tiles",
+                "minzoom": 0,
+                "maxzoom": 19
+            }
+        ]
+    };
+    //Create the main map
     var map = new maplibregl.Map({
         container: 'map',
         //style: 'https://demotiles.maplibre.org/globe.json',
-
-        style: {
-                "version": 8,
-                "sources": {
-                "osm-tiles": {
-                "type": "raster",
-                "tiles": [
-                  "https://a.tile.openstreetmap.org/{z}/{x}/{y}.png",
-                  "https://b.tile.openstreetmap.org/{z}/{x}/{y}.png",
-                  "https://c.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                ],
-                "tileSize": 256
-                }
-                },
-                "layers": [
-                {
-                        "id": "osm-tiles-layer",
-                        "type": "raster",
-                        "source": "osm-tiles",
-                        "minzoom": 0,
-                        "maxzoom": 19
-                        }
-                        ]
-                },
+        style: mapStyle,            
         projection: "mercator",
         maplibreLogo: true,
         center: lnglat0,
@@ -281,10 +294,16 @@ var do_3dmap = function() {
         bearing: 10,
         attributionControl: true,
         maxBounds: bounds,
-        config: {
-            basemap: {showIndoor: basemap_showIndoor,
-                        show3dObjects: basemap_show3dObjects}
-        }
+        canvasContextAttributes: {antialias: true},
+        centerClampedToGround: false,
+        elevation: 0,
+        maxPitch: 89.9
+        /*
+                config: {
+                    basemap: {showIndoor: basemap_showIndoor,
+                                show3dObjects: basemap_show3dObjects}
+                }
+        */
     });
 
     map.addControl(new maplibregl.NavigationControl());//zoom, compass/reset
@@ -333,17 +352,16 @@ var do_3dmap = function() {
                     //console.log("ARRAY");
                     for (var prop in data) {
                         if (data[prop].command) { doCommand( data[prop].command ); delete data[prop].command; }
-                        if (data[prop].hasOwnProperty("name")) { setMarker(data[prop]); }
-                        else { console.log("SKIP A",data[prop]); }
+
+                        //if (data[prop].hasOwnProperty("name")) { set Marker(data[prop]); }
+                        //else { console.log("SKIP A",data[prop]); }
                     }
                 }
                 else {
                     if (data.command) { doCommand(data.command); delete data.command; }
-                    if (data.hasOwnProperty("name")) { console.log("SET MARKER"); setMarker(data); } /* -- never success --  */
-                    else {
-                                //console.log("SKIP B",data);
-                                console.log("SKIP B", "markersStore:", markersStore);
-                         }
+
+                    //if (data.hasOwnProperty("name")) { console.log("SET MARKER"); set Marker(data); } /* -- never success --  */
+                    //else {console.log("SKIP B", "markersStore:", markersStore);}
                 }
             };
         }
@@ -372,13 +390,12 @@ var do_3dmap = function() {
                 valueMsg.innerHTML = `${e.lngLat.lng.toFixed(5)},${e.lngLat.lat.toFixed(5)}; <b>Dist:</b>${dist}; <b>Delta:</b> N=${north} E=${east} D=${down}`;
                 oldLngLat = [e.lngLat.lng, e.lngLat.lat];
         });
-
+        //'obs-time': String( new Date().getTime() )
 
         //
         // *** DoCommand ***
         // Status:
 
-        //console.log("Before doCommand");
         var doCommand = function(c) {
             console.log("CMD",c);
             // Add our own overlay geojson layer if necessary
@@ -388,7 +405,7 @@ var do_3dmap = function() {
                 c.map.hasOwnProperty("overlay") &&
                 !c.map.hasOwnProperty("featuretype") )
             {
-                addGeo(c.map.overlay,c.map.geojson);
+                addGeoPoly(c.map.overlay, c.map.geojson);//add extruded polygons.
             }
 
             // --- inject/process something different than 3d buildings here ---
@@ -460,22 +477,15 @@ var do_3dmap = function() {
             if (c.hasOwnProperty("bearing")) { map.setBearing(c.bearing); }
         }
 
-        console.log("After doCommand.");
+        //console.log("After doCommand.");
 
         //This controls the display-visibility, may remove some resources
         var layerControl = function(o, c) {
-                //c: json, with keys: 'remove' (true, false), 'unique_name' (string), ++
-                //if (c === true && !map.getLayer(o) && map.getSource(o)) {
-                //      map.addLayer(o);
-                //      console.log("---Done addLayer");
-                //}
-
                 const remove = c.remove;
                 const uniqName = c.unique_name;
-                        console.log("--- uniqName is:", uniqName);
-                        console.log("--- remove is:", remove);
+                //console.log("--- uniqName is:", uniqName);
+                //console.log("--- remove is:", remove);
 
-                //if (c === true && map.getLayer(o)) {
                 if (remove === true && map.getLayer(o)) {
                         map.removeLayer(o);
                         console.log("===Done removeLayer");
@@ -499,14 +509,7 @@ var do_3dmap = function() {
                 }
         }
 
-        //More control/config
-        // mainMarker reuse
-        // t: toggle something (access by "index)", options: "lngLat" (update it first)
-
-
-        //
         //This renders geojson data injected from node-red
-        //
         //also map.removeSource(sid), gs=map.getSource(sid), gs.setCoordinates(newxy)
 
         var addGeoLine = function(o,g) {
@@ -541,10 +544,6 @@ var do_3dmap = function() {
 
 
         //Create markers
-        //Confusing when accompanying 3D object (need access for later ON/OFF toggle)
-        //TODO: for such case, use separate code
-        //var addGeoMarker2 = function(o,g) {  .. need uniqName to full use
-
         var addGeoMarker2 = function(o,g) {
                 //o: (overlay)
                 //g: geojson for single point, with properties.uniqueName
@@ -626,7 +625,6 @@ var do_3dmap = function() {
                 })
         }
 
-
         //Create points as a layer
         var addGeoPoint = function(o,g) {
           if (map.getLayer(o)) map.removeLayer(o);
@@ -655,11 +653,13 @@ var do_3dmap = function() {
                     'text-anchor': 'top'
                 }
           })
-
         }
 
         //Create extruded polygons
-        var addGeo = function(o,g) {
+        var addGeoPoly = function(o,g) {
+            //Check if layer already exists, remove it first
+            if (map.getLayer(o)) map.removeLayer(o);
+            if (map.getSource(o)) map.removeSource(o);
             map.addLayer({
                 'id': o,
                 'type': 'fill-extrusion',
@@ -700,109 +700,6 @@ var do_3dmap = function() {
                 map.getCanvas().style.cursor = '';
             });
 
-        }
-
-
-        //Create extrude-markers
-        var setMarker = function(d) {
-            if (d.hasOwnProperty("area")) { return; }  // ignore areas for now.
-            console.log("Marker_DATA",d);
-
-            //people = {};//init (my code)
-            if (people.hasOwnProperty(d.name)) {
-
-                //console.log("Update_existing_mkr");
-
-                map.getSource(d.name).setData(getPoints(d)); // Just update existing marker
-                //console.log("Passed setData()");
-            }
-            else {  // it's a new thing
-
-                console.log("Create_new_mkr");
-
-                people[d.name] = d;
-                map.addLayer({
-                    'id': d.name,
-                    'type': 'fill-extrusion',
-                    'source': {
-                        'type': 'geojson',
-                        'data': getPoints(d)
-                    },
-                    'paint': {
-                        // https://www.mapbox.com/mapbox-gl-js/style-spec/#expressions
-                        'fill-extrusion-color': ['get', 'color'],
-                        'fill-extrusion-height': ['get', 'height'],
-                        'fill-extrusion-base': ['get', 'base_height'],
-                        'fill-extrusion-opacity': 1
-                    }
-                },firstSymbolId);
-                //console.log("Follows addLayer");
-            }
-        }
-
-
-        var lookupColor = function(s) {
-            var c = s.charAt(1);
-            if (c === "F") { return "#79DFFF"; }
-            if (c === "N") { return "#A4FFA3"; }
-            if (c === "U") { return "#FFFF78"; }
-            if (c === "H") { return "#FF7779"; }
-            if (c === "S") { return "#FF7779"; }
-        }
-
-        // create the points for the marker and return the geojson
-        var getPoints = function(p) {
-            var fac = 0.000007;   // basic size for block icon in degrees....
-            var thing = "";
-            if (p.hasOwnProperty("icon")) {
-                if (p.icon.indexOf("male") !== -1) { thing = "person"; }
-            }
-            p.SDIC = p.SIDC || p.sidc;
-            if (p.hasOwnProperty("SIDC")) {
-                if (p.SIDC.indexOf("SFGPU") !== -1) { thing = "person"; }
-                if (p.SIDC.indexOf("SFGPUC") !== -1) { thing = "block"; }
-                if (p.SIDC.indexOf("GPEV") !== -1) { thing = "block"; }
-                p.iconColor = lookupColor(p.SIDC);
-            }
-            var t = p.type || thing;
-            var base = p.height || 0;
-            if (t === "person") { tall = 3; }                       // person slightly tall and thin
-            else if (t === "bar") { base = 0; tall = p.height; }    // bar from ground to height
-            else if (t === "block") { fac = fac * 4; tall = 5; }    // block large and cube
-            else { tall = 2; fac = fac * 2; }                       // else small cube
-            //console.log({p},{t},{fac},{base},{tall});
-            var sin = 1;
-            var cos = 0;
-            p.hdg = Number(p.hdg || p.heading);
-            if (p.hasOwnProperty("hdg") && !isNaN(p.hdg)) {
-                sin = Math.sin((90 - p.hdg) * Math.PI / 180);
-                cos = Math.cos((90 - p.hdg) * Math.PI / 180);
-            }
-            var dx = 1 * cos - 1 * sin;
-            var dy = 1 * sin + 1 * cos;
-            var d = {
-                "type": "Feature",
-                "properties": {
-                    "name": p.name,
-                    "type": t,
-                    "color": p.iconColor || "#910000",
-                    "height": base + tall,
-                    "base_height": base
-                },
-                "geometry": {
-                    "type": "Polygon",
-                    "coordinates": [
-                        [
-                            [ p.lon + (fac * dx ) / Math.cos( Math.PI / 180 * p.lat ), p.lat + (fac * dy) ],
-                            [ p.lon - (fac * dy ) / Math.cos( Math.PI / 180 * p.lat ), p.lat + (fac * dx) ],
-                            [ p.lon - (fac * dx ) / Math.cos( Math.PI / 180 * p.lat ), p.lat - (fac * dy) ],
-                            [ p.lon + (fac * dy ) / Math.cos( Math.PI / 180 * p.lat ), p.lat - (fac * dx) ],
-                            [ p.lon + (fac * dx ) / Math.cos( Math.PI / 180 * p.lat ), p.lat + (fac * dy) ],
-                        ]
-                    ]
-                }
-            }
-            return d;
         }
 
         document.addEventListener ("keydown", function (ev) {
@@ -865,14 +762,11 @@ var do_3dmap = function() {
         console.log("Status on THREE? once-idle:", THREE);
     });//once-idle
 
-
     //Test-code
     //makeMkrs(map);//OK good.
     //console.log("THREE: "+ THREE);//always error: THREE is not defined
     //testMapEvt(map);//Status: no action!
     //end test
-
-    //window.map = map;//causes strange behaviour!
 }//do_3dmap
 
 
