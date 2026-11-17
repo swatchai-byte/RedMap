@@ -8,3 +8,6 @@ worldmap/unitgenerator.html
 *.pmtiles
 worldmap/images/world-110m-flat.json
 node*.tgz
+worldmap/sockjs.min.js
+worldmap/index3d-maplibre6.html
+

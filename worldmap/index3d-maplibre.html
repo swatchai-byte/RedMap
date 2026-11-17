@@ -34,6 +34,9 @@
         //Set global {LatLon_nv: LatLon_nv, Ned: Ned, Cartesian: Cartesian };
         //export { LatLon_NvectorEllipsoidal as default, ...
         //   NvectorEllipsoidal as Nvector, Cartesian_Nvector as Cartesian, Ned, Dms}
+        import {LatLon} from 'https://cdn.jsdelivr.net/npm/geodesy@2.4.0/utm.js';
+        import Utm from 'https://cdn.jsdelivr.net/npm/geodesy@2.4.0/utm.js';
+        
         import LatLon_nv, {
             Nvector,
             Cartesian,
@@ -41,49 +44,39 @@
             Dms
         } from 'https://cdn.jsdelivr.net/npm/geodesy@2.4.0/latlon-nvector-ellipsoidal.js';
 
-        //Test that everything has imported successfully
-        try {
-            // Instantiate the primary LatLon class (Paris, 50m above the ellipsoid)
-            const point = new LatLon_nv(48.8566, 2.3522, 50);
-
-            // Convert to an Nvector component
-            const nvec = point.toNvector();
-
-            console.log("Geodesy successfully loaded from CDN!");
-            //console.log("LatLon_nv Instance:", point.toString('dms'));
-            //console.log("Associated Nvector:", nvec.toString());
-            //console.log("Helper Class Verification (Ned):", typeof Ned);
-        } catch (error) {
-            console.error("Import Veness Geodesy failed:", error);
-        }
-
+        window.LatLon = LatLon;//has .toUtm()
         window.LatLon_nv = LatLon_nv;
         window.Nvector = Nvector;
         window.Cartesian = Cartesian;
         window.Ned = Ned;
         window.Dms = Dms;
+        window.Utm = Utm;//has .toLatLon()
 
         // Tell classic scripts that the modules are ready
         window.dispatchEvent(new Event('libraries-ready'));
     </script>
 
     <style>
-        body { margin:0; padding:0; }
-        #map { position:absolute; top:0; bottom:0; width:95%; }
-        /*  #map2 { position:absolute; top:0; bottom:0; width:50%; left:50%; }  */
-        .custom-info {
-                position: absolute;
-                font-family: sans-serif;
-                margin-top: 5px;
-                margin-left: 5px;
-                padding: 5px;
-                width: 30%;
-                border: 2px solid black;
-                font-size: 14px;
-                color: #222;
-                background-color: #fff;
-                border-radius: 3px;
-                }
+      body { margin:0; padding:0; }
+      #map { position:absolute; top:0; bottom:0; width:95%; }
+      /*  #map2 { position:absolute; top:0; bottom:0; width:50%; left:50%; }  */
+      .custom-info {
+              position: absolute;
+              font-family: sans-serif;
+              margin-top: 5px;
+              margin-left: 5px;
+              padding: 5px;
+              width: 30%;
+              height: 240px;
+              border: 2px solid black;
+              font-size: 14px;
+              color: #222;
+              background-color: rgba(255,255,255,0.6);
+              border-radius: 3px;
+              /* box-shadow: 1px 1px 2px; */
+              overflow-y: scroll;
+              overflow-x: auto;
+              }
     .mapboxgl-popup {
         max-width: 400px;
         font:
@@ -102,20 +95,27 @@
         pointer-events: none;
         cursor: default;
         }
+    .popupClass {
+        /*  width: 320px;
+        height: 140px;
+        overflow-y: scroll; */
+        overflow-x: auto;
+        background-color: rgba(255,255,255,0.23);
+        border-radius: 7px;
+
+      }
 
     </style>
 </head>
 
 <body>
 <div id='map'></div>
-<!-- div id='map2'></div -->
-
 <div class="custom-info">
   <div><strong>Title:</strong>&nbsp;<span id="title"></span></div>
   <div><strong>Desc.:</strong>&nbsp;<span id="desc"></span></div>
   <div><strong>Value:</strong>&nbsp;<span id="value"></span></div>
-  <div><strong>Clicked lng,lat:</strong>&nbsp;<span id="msg">By SKK</span></div>
-  <div><strong>Layer:</strong>&nbsp;<span id="layer"></span></div>
+  <div><strong>Lng,Lat:</strong>&nbsp;<span id="msg">By SKK</span></div>
+  <div><strong>Layer handling:</strong>&nbsp;<div id="layersel"></div></div>
   <div><strong>Properties:</strong>&nbsp;<span id="properties"></span></div>
 </div>
 <canvas id="canvasID" width="800" height="800">Canvas not supported</canvas>
@@ -129,22 +129,23 @@
 //var mbstyle = 'mapbox://styles/mapbox/standard';//not good
 
 window.addEventListener('libraries-ready', () => {
-    console.log("Libraries are ready. You can now use MapLibre, THREE and Geodesy.");
-    // You can now safely use THREE and Geodesy here or in other scripts.
+  console.log("Libraries are ready. You can now use MapLibre, THREE and Geodesy.");
+  // You can now safely use THREE and Geodesy here or in other scripts.
 
-//Beg-mycode
-const titleDiv = document.getElementById('title');
-const descDiv = document.getElementById('desc');
-const valueDiv = document.getElementById('value');
-const valueMsg = document.getElementById('msg');
-const layerDiv = document.getElementById('layer');
-const propertiesDiv = document.getElementById('properties');
-var pupButton1;// = document.querySelector('#execButton1');
-var pupButton2;// = document.querySelector('#execButton2');
+  //Beg-mycode
+  const titleDiv = document.getElementById('title');
+  const descDiv = document.getElementById('desc');
+  const valueDiv = document.getElementById('value');
+  const valueMsg = document.getElementById('msg');
+  const layerDiv = document.getElementById('layersel');
+  const propertiesDiv = document.getElementById('properties');
+  //var pupButton1;// = document.querySelector('#execButton1');
+  //var pupButton2;// = document.querySelector('#execButton2');
 
 //Obj data collections
 const mapsStore = {};
 const markersStore = {};
+var markersOpacity = 1;
 
 //PopUp code
 const markerHeight = 50/2;
@@ -159,7 +160,7 @@ const popupOffsets = {
     'bottom-right': [-linearOffset, (markerHeight - markerRadius + linearOffset) * -1],
     'left': [markerRadius, (markerHeight - markerRadius) * -1],
     'right': [-markerRadius, (markerHeight - markerRadius) * -1]
-};
+};//Note: pointer is above target!
 
 //Layers vis handling
 const baseLay = "osm-tiles-layer";
@@ -175,13 +176,14 @@ window.handlePopupClick = function( o, n=0 ) {
             window.map.removeLayer(o); //Do: onRemove() to cleanup
             break;
         case 2:
-            //Hide layer "o"
-            window.map.moveLayer(o, baseLay);
+            window.map.moveLayer(o, baseLay);//Hide layer "o"
             break;
         case 3:
-            let lstate = window.map.getLayer(o);//check-list layers
+            let lstate = window.map.getLayer(o);//check-list layers; dim mkrs
             console.log("Layer obj:", lstate);
-            window.alert("Layers: "+ JSON.stringify(lays));
+            //window.alert("Layers: "+ JSON.stringify(lays));
+            //layerDiv.setHTML = "Layers: "+ JSON.stringify(lays);//not work
+            dimToggleMkrs();
             break;
         case 4:
             window.map.moveLayer( baseLay );//Hide all
@@ -195,7 +197,6 @@ window.handlePopupClick = function( o, n=0 ) {
             break;
         default:
                 //do nothing
-                //alert("Case: " + n);
         }
   }
   else {
@@ -206,14 +207,16 @@ window.handlePopupClick = function( o, n=0 ) {
 
 var templt_mkrPup = function( p ) {
   //p: layerID
-  let html = `<div>
-        <div id="popupContent">Overlay controls:</div>
-        <button id="execButton1" type="button" onclick="window.handlePopupClick(${p},0)"><b>Move to top</b></button><br/>
-        <button id="execButton2" type="button" onclick="window.handlePopupClick(${p},1)"><b>Remove</b></button></div>
-        <button id="execButton3" type="button" onclick="window.handlePopupClick(${p},2)"><b>Hide</b></button></div>
-        <button id="execButton4" type="button" onclick="window.handlePopupClick(${p},3)"><b>Check layers</b></button></div>
-        <button id="execButton5" type="button" onclick="window.handlePopupClick(${p},4)"><b>Hide all</b></button></div>
-        <button id="execButton6" type="button" onclick="window.handlePopupClick(${p},5)"><b>Show all</b></button></div>`;
+  let a = `window.handlePopupClick(${p}`;
+  let html = `<div style="background-color:rgba(255,255,255,0.6)">
+        <span>&nbsp;Layer ID:<b> ${p}</b></span><br/>&nbsp;
+        <button type="button" onclick="${a},0)"><b>Move to top</b></button><br/>&nbsp;
+        <button type="button" onclick="${a},1)"><b>Remove this</b></button><br/>&nbsp;
+        <button type="button" onclick="${a},2)"><b>Hide this</b></button><hr/>
+        &nbsp;<button type="button" onclick="${a},3)"><b>Markers on/off</b></button><br/>&nbsp;
+        <button type="button" onclick="${a},4)"><b>Hide all</b></button><br/>&nbsp;
+        <button type="button" onclick="${a},5)"><b>Show all</b></button><br/>&nbsp;
+        </div>`;
 
   return html;
 }
@@ -226,14 +229,13 @@ var sceneOrigin = lnglat0;
 var oldLngLat = [100,13];
 var threeInitFlag = false;
 
-//const { MercatorCoordinate } = maplibregl;//coord conversion util
-
 //3dbaseMap config
 var basemap_showIndoor = false;
 var basemap_show3dObjects = false;
 
+//Others
 var sharedRenderer;
-var mainPopup; //on map-open, will be set at map center
+var mainPopup; //on map-open, at map center
 
 //Confine the map within this
 const bounds = [
@@ -243,22 +245,21 @@ const bounds = [
 
 //THREE resources
 var materialCache;
-const grid_specs = { grid_draw: true,
+const grid_specs = { drawThis: true,
         grid_spec: [100, 10, 0x0000ff, 0x000000],
         grid_xyh: [50, 50, 0]
     }
 
-//var map;//also works, but use as is.
+//var map;//also works, but ignore it.
 //MapLibre is initialized in do_3dmap.
 
 const maplibregl = window.maplibregl;
-console.log("maplibregl:", maplibregl);
-
+//console.log("maplibregl:", maplibregl);
 
 var do_3dmap = function() {
-    var people = {};
+    //var people = {};
     //Set map style
-    const mapStyle = {
+    const mapStyleOsm = {
         "version": 8,
         "sources": {
             "osm-tiles": {
@@ -269,7 +270,8 @@ var do_3dmap = function() {
                     "https://c.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 ],
                 "tileSize": 256
-            }
+            },
+            //other sources
         },
         "layers": [
             {
@@ -278,14 +280,15 @@ var do_3dmap = function() {
                 "source": "osm-tiles",
                 "minzoom": 0,
                 "maxzoom": 19
-            }
+            },
+            //other layers
         ]
     };
     //Create the main map
     var map = new maplibregl.Map({
         container: 'map',
         //style: 'https://demotiles.maplibre.org/globe.json',
-        style: mapStyle,            
+        style: mapStyleOsm,            
         projection: "mercator",
         maplibreLogo: true,
         center: lnglat0,
@@ -299,25 +302,27 @@ var do_3dmap = function() {
         elevation: 0,
         maxPitch: 89.9
         /*
-                config: {
-                    basemap: {showIndoor: basemap_showIndoor,
-                                show3dObjects: basemap_show3dObjects}
-                }
+          config: {
+              basemap: {showIndoor: basemap_showIndoor,
+                          show3dObjects: basemap_show3dObjects}
+          }
         */
     });
 
     map.addControl(new maplibregl.NavigationControl());//zoom, compass/reset
     //map.showLayers3DWireframe = false;
+    
+    map.addControl(new maplibregl.ScaleControl({maxWidth:80, unit:'metric'}));
 
     const options = {
         focusAfterOpen: false,
-        offset: popupOffsets
+        offset: popupOffsets,
+        className: "popupClass"
         }
     mainPopup =  new maplibregl.Popup(options)
-                    .setLngLat(lnglat0)
-                    .setHTML("Map center (Chula)")
-                    .addTo(map);
-    //use global var (for global use); mainPopup.setLngLat().setHTML(), markere.togglePopup(), etc
+                .setLngLat(lnglat0)
+                .setHTML("<div 'background-color:rgba(255,255,255,0.5)'><b>Map center (Chula)</b></div>")
+                .addTo(map);
 
     map.on('load', function() {
         window.map = map;
@@ -331,14 +336,15 @@ var do_3dmap = function() {
         }
 
 
-        // ---- Connect to the Node-RED Events Websocket --------------------
-
+        // *** Connect to the Node-RED Events Websocket
         var connect = function() {
             ws = new SockJS(location.pathname.split("index")[0] + 'socket');
+            
             ws.onopen = function() {
                 console.log("CONNECTED");
-                ws.send(JSON.stringify({action:"connected"}));
+                ws.send(JSON.stringify({action:"connected", client:"index3d-maplibre.html"}));//send to server
             };
+            
             ws.onclose = function() {
                 console.log("DISCONNECTED");
                 setTimeout(function() { connect(); }, 2500);
@@ -348,36 +354,55 @@ var do_3dmap = function() {
             ws.onmessage = function(e) {
                 var data = JSON.parse(e.data);
                 console.log("GOT",data);
+                
+                //Better use switch (data.type) here
+                //Server side must provide "type", "task", jsondata
+                
                 if (Array.isArray(data)) {
-                    //console.log("ARRAY");
-                    for (var prop in data) {
-                        if (data[prop].command) { doCommand( data[prop].command ); delete data[prop].command; }
-
-                        //if (data[prop].hasOwnProperty("name")) { set Marker(data[prop]); }
-                        //else { console.log("SKIP A",data[prop]); }
-                    }
+                  //console.log("ARRAY");//ex. payload=[obji, objk,]; array of objects
+                  for (var prop in data) {
+                    //handle each item in the array (do-i-Command)
+                    
+                    if (data[prop].command) { doCommand( data[prop].command ); delete data[prop].command; }
+                    //if (data[prop].command) { console.log("ARRAY data:", data[prop].command ); };//OK
+                    
+                    //if (data[prop].hasOwnProperty("name")) { set Marker(data[prop]); }
+                    //else { console.log("SKIP A",data[prop]); }
+                  }
                 }
+                
                 else {
-                    if (data.command) { doCommand(data.command); delete data.command; }
-
-                    //if (data.hasOwnProperty("name")) { console.log("SET MARKER"); set Marker(data); } /* -- never success --  */
-                    //else {console.log("SKIP B", "markersStore:", markersStore);}
+                  //my apps mostly use this; payload={command: {map: m}}; 
+                  //console.log("NOT ARRAY");//But object
+                  
+                  if (data.command) { doCommand(data.command); delete data.command; }
+                  //else {console.log("SKIP B", "markersStore:", markersStore);}
                 }
-            };
-        }
+            }
+            
+            //Sending messages to server
+            /*
+            //function sendMessage(text) {
+            //    ws.send( text );
+            // }
+            */
+        };//func
 
-        console.log("CONNECT TO",location.pathname + 'socket');
+        //console.log("CONNECT TO",location.pathname + 'socket');
         connect();
 
 
-        //Add interaction (click markers)
+        //Add interaction (click markers, etc)
         //MapLibre-GL, also has mousemove, etc.
         // e.point is the x, y coordinates of the mousemove event relative
-        // to the top-left corner of the map
+        //   to the top-left corner of the map
         // e.lngLat is the longitude, latitude
         //compute delta x,y,z from oldLngLat (need Veness' geodesy) -- done
         map.on('click', (e) => {
                 e.preventDefault();
+                //clear ...
+                layerDiv.innerHTML = "";
+                
                 let dist = new maplibregl.LngLat(...oldLngLat).distanceTo(e.lngLat).toFixed(3);
                 let p1 = new LatLon_nv(oldLngLat[1], oldLngLat[0], 0);//seq: lat,long
                 let p2 = new LatLon_nv(e.lngLat.lat, e.lngLat.lng, 0);
@@ -387,87 +412,141 @@ var do_3dmap = function() {
                 let down = delta12.down.toFixed(3);
                 //console.log("Delta:", delta12);
                 //let mercatorMeter = 0;//MercatorCoordinate.fromLngLat({ lng: 0, lat: 0}, 0);
-                valueMsg.innerHTML = `${e.lngLat.lng.toFixed(5)},${e.lngLat.lat.toFixed(5)}; <b>Dist:</b>${dist}; <b>Delta:</b> N=${north} E=${east} D=${down}`;
-                oldLngLat = [e.lngLat.lng, e.lngLat.lat];
+                let lng = e.lngLat.lng;
+                let lat = e.lngLat.lat;
+                oldLngLat = [lng, lat];
+                //get Utm N/E
+                
+                let ll1 = new LatLon(lat, lng);
+                let text = "new LatLon(15, 101): " + ll1;
+                
+                /*  
+                try {
+                    //This causes err, and disconnects websocket
+                    //Also stops node-red
+                    sendMessage( text )}
+                catch(e) {} 
+                ***/
+
+                let utm1 = ll1.toUtm();
+                console.log ("utm1=ll1.toUtm(): " + utm1);//need 3-4 decimal places
+                //utm1:- zone, hemisphere, easting, northing, convergence, scale
+                let nort1 = utm1.northing.toFixed(2);
+                let east1 = utm1.easting.toFixed(2);
+                valueMsg.innerHTML = `${lng.toFixed(5)},${lat.toFixed(5)}; <b>Dist:</b>${dist}; <b>Delta:</b> N=${north} E=${east} D=${down}<br/>UTM: ${nort1} ${east1}`;
+                
         });
         //'obs-time': String( new Date().getTime() )
 
         //
-        // *** DoCommand ***
-        // Status:
+        // DoCommand
+        //
 
         var doCommand = function(c) {
             console.log("CMD",c);
-            // Add our own overlay geojson layer if necessary
+            
             if (
-                c.hasOwnProperty("map") &&
-                c.map.hasOwnProperty("geojson") &&
-                c.map.hasOwnProperty("overlay") &&
-                !c.map.hasOwnProperty("featuretype") )
-            {
-                addGeoPoly(c.map.overlay, c.map.geojson);//add extruded polygons.
-            }
+              c.hasOwnProperty("map") &&
+              c.map.hasOwnProperty("jsonData") &&
+              c.map.hasOwnProperty("overlayID") &&
+              !c.map.hasOwnProperty("task") )
+                    {
+                      addGeoPoly(c.map.overlayID, c.map.jsonData);
+                      //simple extruded polygons by maplibre
+                      //layer type: fill-extrusion
+                    }
 
-            // --- inject/process something different than 3d buildings here ---
+            // Inject/process something different than extruded polygon (using THREE, etc)
             if (
-                c.hasOwnProperty("map") &&
-                c.map.hasOwnProperty("geojson") &&
-                c.map.hasOwnProperty("overlay") &&
-                c.map.hasOwnProperty("featuretype") )
+              c.hasOwnProperty("map") &&
+              c.map.hasOwnProperty("jsonData") &&
+              c.map.hasOwnProperty("overlayID") &&
+              c.map.hasOwnProperty("task") )
             {
+                      /* -----
+                      Todo: feature-type --> task, done
+                      For 'Point' feature, can do: marker, marker2, symbol, text, circle
+                      For 'Polygon': outline, fill
+                      */
+                      
+                      // Many possible objects
+                      // Current use: texts for UTM grid
+                      
+                      console.log("--- feature specific handling");
 
-            //may need to delete the existing source w/ same id
-
-              if (c.map.featuretype === 'point') {
-                addGeoPoint(c.map.overlay, c.map.geojson);
+              // layer type: symbol
+              if (c.map.task === 'point') {
+                addGeoPoint(c.map.overlayID, c.map.jsonData);
               }
 
-              if (c.map.featuretype === 'marker') {
-                addGeoMarker(c.map.overlay, c.map.geojson);//overlay is dummy
+              // data: LineString, MultiLineString
+              if (c.map.task === 'linestring') {
+                addGeoLine(c.map.overlayID, c.map.jsonData);
               }
 
-              if (c.map.featuretype === 'marker2') {
-                addGeoMarker2(c.map.overlay, c.map.geojson);//overlay is dummy
+              // Basic marker
+              if (c.map.task === 'marker') {
+                addGeoMarker(c.map.overlayID, c.map.jsonData);//overlayID is dummy
               }
-
-              if (c.map.featuretype === 'linestring') {
-                addGeoLine(c.map.overlay, c.map.geojson);
-              }
-
-              if (c.map.featuretype === 'elevatedLineString') {
-                addElevLine(c.map.overlay, c.map.geojson);//Not available on MapLibre
-              }
-
-              //--- Three.js handling ---
-              //Requires THREE-3d
               
-              if (c.map.featuretype === 'threeJSModel') {
+              // Special marker accompanying a layer, has context menu attached
+              ////if (c.map.task === 'marker2') {
+              
+              if (c.map.task === 'layerCtrlMkr') {
+                addGeoMarker2(c.map.overlayID, c.map.jsonData);//overlayID is dummy
+              }
+
+              //Remove source, layer, layer-Ctrl-Marker according to spec
+              //todo: similar actions: mapControl, Camera, Style 
+              if (c.map.task === 'removeLayerCtrlMkr') {
+                //console.log("*** removeLayerCtrlMkr body", c.map);
+                removeLayerCtrlMkr(c.map.overlayID, c.map.jsonData);
+              }
+              
+              if (c.map.task === 'remove1Layer') {
+                remove1Layer(c.map.overlayID, c.map.jsonData);
+              }
+              if (c.map.task === 'removeLayers') {
+                if (Array.isArray( c.map.overlayID )) {
+                    removeLayers(c.map.overlayID, c.map.jsonData);
+                }
+              }
+
+              //--- Three.js handling
+              
+              if (c.map.task === 'threeJSModel') {
                         //Ignore most input, and use test code
                         console.log("*** begin threeJSModel");
-                        //addThreeJSModel(c.map.overlay, c.map.geojson, c.map.modelOriginLnglat, c.map.modelOriginH, c.map.objXyz, c.map.xy_gridH);
-                        addThreeJSModel(c.map.overlay, c.map.geojson, c.map.modelOriginLnglat, c.map.modelOriginH, c.map.objXyz, c.map.grid_specs);
+                        //addThreeJSModel(c.map.overlayID, c.map.jsonData, c.map.originLnglatH, c.map.XYZs, c.map.xy_gridH);
+                        addThreeJSModel(c.map.overlayID, c.map.jsonData, c.map.originLnglatH, c.map.XYZs, c.map.grid_specs, c.map.polarGrid_specs);
                         console.log("*** done threeJSModel");
                 }
-              else if (c.map.featuretype === 'threeJSModelMesh') {
+              else if (c.map.task === 'threeJSModelMesh') {
                         console.log("*** threeJSModelMesh");
-                        //addThreeJSModelMesh(c.map.overlay, c.map.geojson, c.map.modelOriginLnglat, c.map.modelOriginH, c.map.objXyz, c.map.xy_gridH);
-                        addThreeJSModelMesh(c.map.overlay, c.map.geojson, c.map.modelOriginLnglat, c.map.modelOriginH, c.map.objXyz, c.map.grid_specs);
+                        //addThreeJSModelMesh(c.map.overlayID, c.map.jsonData, c.map.originLnglatH, c.map.XYZs, c.map.xy_gridH);
+                        addThreeJSModelMesh(c.map.overlayID, c.map.jsonData, c.map.originLnglatH, c.map.XYZs, c.map.grid_specs, c.map.polarGrid_specs);
                 }
-              else if (c.map.featuretype === 'layerControl') {
-                        console.log("*** layerControl body", c.map);
-                        //layerControl(c.map.overlay, c.map.geojson.remove);//remove: true, false
-                        layerControl(c.map.overlay, c.map.geojson);//geojson contains: remove, uniqueName, etc.
-                }
+                
+
+              
               else {
-                console.log("*** Nothing to do with ThreeJS. Unknown featuretype!", c.map);
+                console.log("*** Nothing to do with ThreeJS. Unknown task!", c.map);
                 }
 
-              //--- more feature specific handling---
+              //--- more feature specific handling
 
             }
 
 
             //Map view orientation specs
+            /*
+              {command: {map: m, 
+                lat: 13.7475,
+                lon: 100.6531,
+                zoom: 17,
+                pitch: 45,
+              }}
+            */
             var clat,clon;
             if (c.hasOwnProperty("lat")) { clat = c.lat; }
             if (c.hasOwnProperty("lon")) { clon = c.lon; }
@@ -475,37 +554,65 @@ var do_3dmap = function() {
             if (c.hasOwnProperty("zoom")) { map.setZoom(c.zoom); }
             if (c.hasOwnProperty("pitch")) { map.setPitch(c.pitch); }
             if (c.hasOwnProperty("bearing")) { map.setBearing(c.bearing); }
+            if (c.hasOwnProperty("panTo")) { map.panTo(c.panTo, {duration: 700}); }
+            if (c.hasOwnProperty("flyTo")) { map.flyTo(c.flyTo); }
+        }//do_command
+
+        console.log("After doCommand.");
+
+        //This remove some resources
+        
+        var remove1Layer = function(o, c) {
+            map.removeLayer(o);
         }
-
-        //console.log("After doCommand.");
-
-        //This controls the display-visibility, may remove some resources
-        var layerControl = function(o, c) {
+        
+        var removeLayers = function(o, c) {
+            //o: array of layerIDs
+            //c: jsonData:
+            o.forEach(item => {
+                map.removeLayer(item);
+            })
+            const removeCtrlMkr = c.removeCtrlMkr || false;
+            if (removeCtrlMkr === true) {
+                o.forEach(item => {
+                    markersStore[ item ].remove();//remove the marker
+                    delete markersStore[ item ];
+                })
+            }
+        }
+        
+        var removeLayerCtrlMkr = function(o, c) {
+            //o: overlayID
+            //c: jsonData:
                 const remove = c.remove;
-                const uniqName = c.unique_name;
-                //console.log("--- uniqName is:", uniqName);
+                const remsrc = remove.source || false;
+                const remlay = remove.layer || false;
+                const uniqName = c.mkrUniqueID;//marker is always removed
+                
+                //console.log("--- uniqName/mkrUniqID is:", uniqName);
                 //console.log("--- remove is:", remove);
 
-                if (remove === true && map.getLayer(o)) {
+                if (remlay === true && map.getLayer(o)) {
                         map.removeLayer(o);
-                        console.log("===Done removeLayer");
-                        //also map.removeSource(o)
+                        //console.log("===Done removeLayer");
                 }
-                else {
-                        //do nothing
+                if (remsrc === true && map.getSource(o)) {
+                        map.removeSource(o);
+                        //console.log("===Done removeSource");
                 }
+                
                 if (uniqName !== 'noname') {
                         console.log("--- uniqName is:", uniqName, "markersStore:", markersStore);
                         if ( Object.hasOwn(markersStore, uniqName) ) {
-                                console.log("Attempt to remove the marker...");
+                                //console.log("Attempt to remove the marker...");
                                 markersStore[ uniqName ].remove();//remove the marker. sometimes fails!
                                 delete markersStore[ uniqName ];
                         }
-                        console.log("Done remove marker/obj_link.");
+                        //console.log("Done remove marker/obj_link.");
                 }
                 else {
                         //nothing todo
-                        console.log("...End of layerControl-process.");
+                        console.log("...End of removeLayerCtrlMkr-process.");
                 }
         }
 
@@ -527,6 +634,7 @@ var do_3dmap = function() {
           //console.log("*** LineColor:", lineColor);
           let lineWidth = g.properties.style['line-width'] || 5;
           //console.log("*** LineWidth::", lineWidth);
+          //Dont use this:'filter': ["==", "$type", "MultiLineString"], it fails.
           map.addLayer({
                 'id': o,
                 'type': 'line',
@@ -538,60 +646,68 @@ var do_3dmap = function() {
                 'paint': {
                         'line-color': lineColor,
                         'line-width': lineWidth
-                }
+                },
+                'filter': ["==", "$type", "LineString"],
           })
         }
 
 
-        //Create markers
+        //Create layer's assoc marker(s)
+        //May need?: fit-zoom to the mkrs
+        //Related func: removeSrcAndLayer
         var addGeoMarker2 = function(o,g) {
-                //o: (overlay)
+                //o: (overlayID)
                 //g: geojson for single point, with properties.uniqueName
-                //   use 'featureCollection' with at least 1 item, may use only the first
-                //?? To get unique names for all items, add number 0,1,2,.. to the 'overlay..' which is used as uniqName
+                //   use 'featureCollection' with at least 1 item, currently use only the first
+                //To get unique names for all items, timeStamp can be generated to use
                 let mks = [];
                 g.features.forEach(item => {
                   mks.push({
-                        "options":{ "className": "marker",
-                                "color": item.properties.color || 0xff0000,
-                                "draggable": item.properties.draggable || false,
-                                "rotation": item.properties.rotation || 0,
-                                "altitude": item.properties.altitude || 0,
-                                "popupText": item.properties.popup_text || "No text!",
-                                },
-                        "lnglat": item.geometry.coordinates,
-                        "uniqName": item.properties.unique_name || "noName",
-                        });
+                    "options":{ "className": "marker",
+                            "color": item.properties.color || 0xff0000,
+                            "draggable": item.properties.draggable || false,
+                            "rotation": item.properties.rotation || 0,
+                            "altitude": item.properties.altitude || 0,
+                            "popupText": item.properties.popup_text || "No popup_text!",
+                            "scale": 0.75
+                            },
+                    "lnglat": item.geometry.coordinates,
+                    "uniqName": item.properties.mkrUniqueID || "noName",
+                    });
                   })
 
-                        //For now assume only 1 item is in mks
-                        const item = mks[0];
-                        if ( markersStore[ item.uniqName ] === undefined && item.uniqName !== "noName") {
+                  //For now assume only 1 item is in mks
+                  const item = mks[0];
+                  if ( markersStore[ item.uniqName ] === undefined && item.uniqName !== "noName") {
 
-                                const mkr = new maplibregl.Marker( item.options )
-                                  .setLngLat( item.lnglat )
-                                  //.setPopup( new maplibregl.Popup({offset:popupOffsets,focusAfterOpen:false}).setHTML(item.options.popupText + templt_mkrPup("'"+ item.uniqName +"'")) )
-                                  .setPopup( new maplibregl.Popup({offset:popupOffsets,focusAfterOpen:false}).setHTML(item.options.popupText ) )
-                                  .addTo(map);
-                                console.log("--- item.uniqName:", item.uniqName);//also the layer-ID (?)
-                                markersStore[ item.uniqName ] = mkr;
+                          const mkr = new maplibregl.Marker( item.options )
+                            .setLngLat( item.lnglat )
+                            //.setHTML(item.options.popupText + templt_mkrPup("'"+ item.uniqName +"'")) )
+                            .setPopup( new maplibregl.Popup({offset:popupOffsets,focusAfterOpen:false}).setHTML(item.options.popupText) )
+                            .addTo(map);
+                          console.log("--- item.uniqName:", item.uniqName);//also the layer-ID (?)
+                          markersStore[ item.uniqName ] = mkr;
 
-                                // Mkr context menu (r-click to open)
-                                // for UI (buttons)
-                                const el = mkr.getElement();
-                                const popup = new maplibregl.Popup({
-                                        closeButton: true,
-                                        closeOnClick: true
-                                });
-                                el.addEventListener("contextmenu", (e) => {
-                                e.preventDefault();
-                                popup
-                                        .setLngLat( mkr.getLngLat() )
-                                        .setHTML( templt_mkrPup( "'"+item.uniqName+"'" ) )
-                                        .addTo(map);
-                                });//Status: good
+                          // Mkr context menu (r-click to open)
+                          // for UI (buttons)
+                          const el = mkr.getElement();
+                          const popup = new maplibregl.Popup({
+                                  closeButton: true,
+                                  closeOnClick: true,
+                                  className: "popupClass"
+                          });
+                          el.addEventListener("contextmenu", (e) => {
+                            e.preventDefault();
+                            popup
+                              .setLngLat( mkr.getLngLat() )
+                              .setHTML( templt_mkrPup( "'"+item.uniqName+"'" ) )
+                              .addTo(map);
+                            //update info-box
+                            //layerDiv.innerHTML or
+                            layerDiv.setHTML = templt_mkrPup( "'"+item.uniqName+"'" );
+                          });
 
-                        }
+                  }
         }
 
         var addGeoMarker = function(o,g) {
@@ -608,7 +724,7 @@ var do_3dmap = function() {
                                 "popupText": item.properties.popup_text || "No text!",
                                 },
                         "lnglat": item.geometry.coordinates,
-                        "uniqName": item.properties.unique_name || "noName",
+                        "uniqName": item.properties.mkrUniqID || "noName",
                         });
                   })
 
@@ -616,24 +732,29 @@ var do_3dmap = function() {
                   const mkr = new maplibregl.Marker( item.options )
                   .setLngLat( item.lnglat )
                   .setPopup( new maplibregl.Popup({offset:popupOffsets,focusAfterOpen:false}).setText(item.options.popupText) )
-                  .addTo(map);
+                  .addTo( map );
+                  
+                  //animate
+                  //map.panTo( item.lnglat, {duration: 1000} );//No effect
+                  
                   console.log("--- item.uniqName:", item.uniqName);
                   if ( markersStore[ item.uniqName ] === undefined ) {
                         markersStore[ item.uniqName ] = mkr;
                   }
                   //console.log("markersStore:", markersStore);
                 })
+                
+                //TODO: find a way to turn ON/OFF as a layer
         }
 
-        //Create points as a layer
+        //Use Points to creat a layer of labels
+        //Currently, text_label OK. Possible: symbol, icon 
+        //
+        //In addLayer, "filter": ["=", "$type", "Point"] can be used to get only points
         var addGeoPoint = function(o,g) {
           if (map.getLayer(o)) map.removeLayer(o);
           if (map.getSource(o)) map.removeSource(o);
-
-          map.addSource(o,
-                {'type': 'geojson', 'data': g}
-                )
-
+          map.addSource(o, {'type': 'geojson', 'data': g});
           map.addLayer({
                 'id': o,
                 'type': 'symbol',
@@ -643,15 +764,18 @@ var do_3dmap = function() {
                     'icon-image': 'marker-15',
                     'icon-allow-overlap': true,
                     'icon-anchor': 'center',
-                    // get the title name from the source's "name" property
+                    //get the title name from the source's "name" property
                     'text-field': ['get', 'name'],
                     'text-font': [
-                            'Open Sans Semibold',
-                            'Arial Unicode MS Bold'
-                    ],
-                    'text-offset': [0, 0.25],
-                    'text-anchor': 'top'
-                }
+                        'Open Sans Semibold',
+                        'Arial Unicode MS Bold'],
+                    'text-offset': [0, 0],
+                    'text-anchor': 'center',
+                    'text-rotate': 0,
+                    'text-size': 12,   //['text-size'],
+                    //'text-color': ['text-color'],
+                    },
+                'filter': ["==", "$type", "Point"],
           })
         }
 
@@ -660,19 +784,21 @@ var do_3dmap = function() {
             //Check if layer already exists, remove it first
             if (map.getLayer(o)) map.removeLayer(o);
             if (map.getSource(o)) map.removeSource(o);
+            //layer-wide opacity
+            let opaq;
+            try {opaq = g.layerStyle.opacity} catch(e){opaq = 1}
+            map.addSource(o, {'type': 'geojson', 'data': g});
             map.addLayer({
                 'id': o,
                 'type': 'fill-extrusion',
-                'source': {
-                    'type': 'geojson',
-                    'data': g
-                },
+                //'source': {'type': 'geojson', 'data': g},
+                'source': o,
                 'paint': {
                     // https://www.mapbox.com/mapbox-gl-js/style-spec/#expressions
                     'fill-extrusion-color': ['get', 'color'],
                     'fill-extrusion-height': ['get', 'height'],
                     'fill-extrusion-base': ['get', 'base_height'],
-                    'fill-extrusion-opacity': 0.6
+                    'fill-extrusion-opacity': opaq
                 }
             });
 
@@ -685,11 +811,13 @@ var do_3dmap = function() {
                 let level = e.features[0].properties.level;
 
                 //`<b>Title:</b>${title}<br /><b>Desc.:</b>${desc}
-                //<br /><b>Level:</b>${level}<br /><b>Overlay:</b>${o}`)
+                //<br /><b>Level:</b>${level}<br /><b>overlayID:</b>${o}`)
 
                 mainPopup.setLngLat(e.lngLat)
-                 .setHTML(`<b>Title:</b>${title}<br /><b>Desc.:</b>${desc}<br /><b>Level:</b>${level}<br /><b>Overlay:</b>${o}`)
+                 .setHTML(`<div style="background-color:rgba(255,255,255,0.6)"><b>Title:</b>${title}<br/><b>Desc.:</b>${desc}<br/><b>Level:</b>${level}<br/><b>overlayID:</b>${o}</div>`)
                  .addTo(map);
+                 
+                layerDiv.innerHTML = templt_mkrPup(`'${o}'`);
             });
 
             map.on('mouseenter', o, (e) => {
@@ -708,20 +836,20 @@ var do_3dmap = function() {
                 //window.onbeforeunload = null;
                 window.location.href = "index.html";
             }
-        });
+        });//4what
 
     });
 
-    //Used for test/demo, ignore most of data sent from node-red
-    var addThreeJSModel = function(o, g, lnglat0, h0, objXyz, grid_specs=grid_specs) {
-                //Must remove layer and source first, so it can be reuse;
+    //For test/demo, ignore most of data sent from node-red
+    var addThreeJSModel = function(o, g, lnglatH0, XYZs, grid_specs=grid_specs, polarGrid_specs={}) {
+                //Remove layer and source first, so it can be reuse;
                 if (map.getLayer(o)) map.removeLayer(o);
                 if (map.getSource(o)) map.removeSource(o);
 
                 console.log("--- json msg:", g );
                 //console.log("Status of THREE?", THREE);
 
-                let sphere2Layer = new ThreeObjCustomLayer( o, lnglat0, h0, objXyz, null, grid_specs=grid_specs );
+                let sphere2Layer = new ThreeObjCustomLayer( o, lnglatH0, XYZs, null, grid_specs=grid_specs, polarGrid_specs=polarGrid_specs );
                 console.log("--- sphere2_Layer_model:");
 
                 map.addLayer( sphere2Layer );
@@ -733,14 +861,14 @@ var do_3dmap = function() {
         };
 
     //Use data sent from node-red
-    var addThreeJSModelMesh = function(o, g, lnglat0, h0, objXyz, grid_specs=grid_specs) {
+    var addThreeJSModelMesh = function(o, g, lnglatH0, XYZs, grid_specs=grid_specs, polarGrid_specs={}) {
                 if (map.getLayer(o)) map.removeLayer(o);
                 if (map.getSource(o)) map.removeSource(o);
 
-                let sphere2LayerMesh = new ThreeObjCustomLayer( o, lnglat0, h0, objXyz, g, grid_specs=grid_specs );
-                console.log("sphere2Layer_mesh:", g);
+                let aLayerMesh = new ThreeObjCustomLayer( o, lnglatH0, XYZs, g, grid_specs=grid_specs, polarGrid_specs=polarGrid_specs );
+                //console.log("aLayerMesh:", g);
 
-                map.addLayer( sphere2LayerMesh );
+                map.addLayer( aLayerMesh );
 
                 console.log("--- layerOrder:", map.getLayersOrder() );
 
@@ -757,13 +885,63 @@ var do_3dmap = function() {
                 glassG: new THREE.MeshPhysicalMaterial({transparent: true, opacity: 0.65, color:0x00ff00 }),
                 glassB: new THREE.MeshPhysicalMaterial({transparent: true, opacity: 0.65, color:0x0000ff }),
         };
+        //console.log("Status on THREE? once-idle:", THREE);//ok
+        
+        try {
+            // Instantiate the primary LatLon class (Paris, 50m above the ellipsoid)
+            const point = new LatLon_nv(48.8566, 2.3522, 50);
 
-        //oldLngLat = new LngLat(oldLngLat);//LngLat Not defined
-        console.log("Status on THREE? once-idle:", THREE);
+            // Convert to an Nvector component
+            const nvec = point.toNvector();
+            //console.log("LatLon_nv Instance:", point.toString('dms'));
+            //console.log("Associated Nvector:", nvec.toString());
+            //console.log("Helper Class Verification (Ned):", typeof Ned);
+            
+            //UTM part
+            const ll1 = new LatLon(15, 101);
+            console.log ("new LatLon(15, 101): " + ll1);
+            const utm1 = ll1.toUtm();
+            console.log ("utm1=ll1.toUtm(): " + utm1);//need 3-4 decimal places
+            //utm1:- zone, hemisphere, easting, northing, convergence, scale
+            console.log ("convergence: " + utm1.convergence);//4 digits
+            console.log ("scale-factor: " + utm1.scale);//9 digits
+            const ll1c = utm1.toLatLon();
+            console.log("ll1c=u1utm.toLatLon(): ", ll1c);//ok
+            
+            const utm2 = new Utm(47,"N",715053,1659298);
+            console.log("utm2=Utm(47,'N',715053,1659298): ", utm2);
+            const ll2 = utm2.toLatLon();
+            console.log("ll2 = utm2.toLatLon():", ll2);//get: _lat,_lon,_height, convergence, scale
+            
+            var latlon2Utm = function(lat, lon, zone) {
+              let ll1 = new window.LatLon(lat, lon);
+              let u1 = ll1.toUtm(zone);//use zone override
+              let ans = `zone:${u1.zone}, hemisphere:${u1.hemisphere}, easting:${u1.easting}, northing:${u1.northing}`;
+              console.log(ans);
+              return {"zone":u1.zone, "hemisphere":u1.hemisphere, "easting":u1.easting, "northing":u1.northing};
+            }
+            latlon2Utm(15, 101);
+            window.latlon2Utm = latlon2Utm;
+            
+            var Utm2latlon = function(zone, hemis, easting, northing) {
+              let u1 = new Utm(zone,hemis,easting,northing);
+              let ll1 = u1.toLatLon();
+              let ans = `_lat: ${ll1._lat}, _lon: ${ll1._lon}, convergence: ${ll1.convergence}, scale: ${ll1.scale}`;
+              console.log(ans);
+              return {"_lat": ll1._lat, "_lon": ll1._lon, "convergence": ll1.convergence, "scale": ll1.scale}
+            }
+            Utm2latlon(47, "N", 550000, 1200000);
+            window.Utm2latlon = Utm2latlon;
+            
+            console.log("Geodesy successfully loaded from CDN!");
+            
+        } catch (error) {
+            console.error("Import Veness Geodesy --failed:", error);
+        }
+        
     });//once-idle
 
     //Test-code
-    //makeMkrs(map);//OK good.
     //console.log("THREE: "+ THREE);//always error: THREE is not defined
     //testMapEvt(map);//Status: no action!
     //end test
@@ -776,15 +954,34 @@ do_3dmap();
 
 //===  functions  ===
 
-function makeMarker(map, lngLat, color_rotate={"color":"blue","rotation":0}, popupText="Hello", unique_name="uniqID") {
+function dimMarkers (opaq) {
+  //opaq: dim:0.4; bright:1
+  //Each marker: markersStore[ uniqName ]
+  Object.values(markersStore).forEach( (mkr) => {
+      mkr.setOpacity(opaq); 
+      //mkr.scale(scale);//bad  
+      });
+  markersOpacity = opaq;
+}
+function dimToggleMkrs () {
+  let opaq;
+  let scale;
+  if (markersOpacity <= 0.5) {opaq=1}
+  else {opaq=.4}
+  dimMarkers (opaq);
+}
+
+
+function makeMarker(map, lngLat, color_rotate={"color":"blue","rotation":0}, popupText="Hello", mkrUniqID="uniqID") {
     // Create a default Marker and add it to the map
     const marker1 = new mapboxgl.Marker( color_rotate )
         .setLngLat( lngLat )
         .setPopup(new maplibregl.Popup({offset:popupOffsets,focusAfterOpen:false}).setText( popupText ))
         .addTo(map);
-    markersStore[unique_name] = marker1;
+    markersStore[mkrUniqID] = marker1;
 }
 
+/*
 function makeMkrs(map) {
     //OK. Easy to use
     // Create a default Marker and add it to the map.
@@ -804,16 +1001,7 @@ function makeMkrs(map) {
       .addTo(map);
     })
 }
-
-
-/*
-let mkr1 = { props: {"color":"green", "rotation": 0), "lnglat": [100.6421,13.7455] },
-let mkr2 = { props: {"color":"red", "rotation": 0), "lnglat": [100.6431,13.7465] },
-let mkr3 = { props: {"color":"blue", "rotation": 45), "lnglat": [100.6531,13.7475] },
-
-makeMarker(map, mkr1.lnglat, color_rotate=mkr1.props, popupText="This is Mkr1");
-makeMarker(map, mkr2.lnglat, color_rotate=mkr2.props, popupText="This is Mkr2");
-makeMarker(map, mkr3.lnglat, color_rotate=mkr3.props, popupText="This is Mkr3");
+//Usage:makeMkrs(map)
 */
 
 //Some classes
@@ -821,23 +1009,28 @@ makeMarker(map, mkr3.lnglat, color_rotate=mkr3.props, popupText="This is Mkr3");
 constructor_params: ThreeObjCustomLayer(...)
 PARAMS:-
  id: layer_id
- oLnglat: model origin in (lng,lat) +
- oHeight: meters
- objXyz: model obj origin. (model units, ref at lnglat)
+ oLnglatH: model origin in (lng,lat, H)
+ XYZs: model obj origin. (model units, ref at lnglat)
  objMesh: meshdata
+ grid_specs: 
 -- */
 
 class ThreeObjCustomLayer {
         type = "custom";
         renderingMode = "3d";
 
-        constructor(id, oLnglat, oHeight, objXyz, objMesh, grid_specs) {
+        constructor(id, oLnglatH, XYZs, objMesh, grid_specs, polarGrid_specs) {
                 this.id = id;
-                this.originLnglat = oLnglat;
-                this.originH = oHeight || 0;
-                this.objXyz = objXyz || [0,0,0];
+                this.originLnglat = [oLnglatH[0], oLnglatH[1]];
+                this.originH = oLnglatH[2] || 0;
+                this.XYZs = XYZs || [0,0,0];
                 this.objMesh = objMesh;
-                this.grid_specs = grid_specs;//|| [400, 10, 0x0000ff, 0x000000]
+                this.grid_specs = grid_specs;//|| [400, 10, 0x0000ff, 0x000000];
+                this.polarGrid_specs = polarGrid_specs;
+          }
+          
+        onRemove(map, gl) {
+            //clear resources
           }
 
         async onAdd(map, gl) {
@@ -886,77 +1079,84 @@ class ThreeObjCustomLayer {
                 directionalLight1.castShadow = true;
                 this.scene.add(directionalLight1);
 
-                //directionalLight1. settings ...
-        directionalLight1.shadow.camera.near = 0.1;
-        directionalLight1.shadow.camera.far = 2000;
-        directionalLight1.shadow.camera.left = -500;
-        directionalLight1.shadow.camera.right = 500;
-        directionalLight1.shadow.camera.top = 500;
-        directionalLight1.shadow.camera.bottom = -500;
+                //settings
+                directionalLight1.shadow.camera.near = 0.1;
+                directionalLight1.shadow.camera.far = 2000;
+                directionalLight1.shadow.camera.left = -500;
+                directionalLight1.shadow.camera.right = 500;
+                directionalLight1.shadow.camera.top = 500;
+                directionalLight1.shadow.camera.bottom = -500;
 
-        directionalLight1.shadow.mapSize.width = 512;
-        directionalLight1.shadow.mapSize.height = 512;
+                directionalLight1.shadow.mapSize.width = 512;
+                directionalLight1.shadow.mapSize.height = 512;
 
-        const groundGeometry = new THREE.PlaneGeometry(1000, 1000);
-        const groundMaterial = new THREE.ShadowMaterial({ opacity: 0.5 });
-        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
-        //ground.rotation.x = -Math.PI / 2;
-        ground.position.y = this.originH;
-        ground.receiveShadow = true;
-        this.scene.add(ground);
+                const groundGeometry = new THREE.PlaneGeometry(1000, 1000);
+                const groundMaterial = new THREE.ShadowMaterial({ opacity: 0.5 });
+                const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+                //ground.rotation.x = -Math.PI / 2;
+                ground.position.y = this.originH;
+                ground.receiveShadow = true;
+                this.scene.add(ground);
 
                 //Handle model data/render
+                //meshObj: a bunch of 3D items
                 if (this.objMesh) {
-                        //assume the input mesh is good+complete
-                        const loader = new THREE.ObjectLoader();
-                        const meshObj = loader.parse( this.objMesh );
-                        this.objXyz.forEach( (xyz,j) => {
-                            //meshObj.rotateZ(Math.PI/(10+j));
-                            meshObj.position.set( ...xyz );
-                            this.scene.add( meshObj.clone() );
-                        });
+                    //assume the input mesh is good+complete
+                    const loader = new THREE.ObjectLoader();
+                    //const meshObj = loader.parse( this.objMesh );//ok
+                    const meshObj = await loader.parseAsync( this.objMesh );//good
+                    this.XYZs.forEach( (xyz,j) => {
+                        //meshObj.rotateZ(Math.PI/(10+j));
+                        meshObj.position.set( ...xyz );
+                        this.scene.add( meshObj.clone() );
+                        //for raycasting each meshObj need book keeping
+                        
+                    });
                 }
                 else {
-                        //Warning
-                        //This case is for testing/debugging
-                        const r = 50;
-                        const solid_geom = new THREE.SphereGeometry(r, 8, 8);
+                    //-- Warning ---
+                    //This is for testing/debugging
+                    const lod = new THREE.LOD();
+                    const r = 50;
+                    //const solid_geom1 = new THREE.SphereGeometry(r, 8, 8);
+                    //const edges0 = new THREE.EdgesGeometry( solid_geom1 );
+                    //const lines0 = new THREE.LineSegments( edges0 );
+            
+                  const levs = 3;//levels of details
+                  for ( let i=0; i<levs; i++ ) {
+                    const solid_geom = new THREE.SphereGeometry(r, 6*(levs-i), 6*(levs-i));
+                    const solid = new THREE.Mesh(solid_geom, materialCache.glassB);        
+                    solid.castShadow = true;
+                    solid.material.opacity = 0.5 + i/levs;
+                    solid.position.set( r, r, r );//model units
+                    //lines0.position.set( r, r, r );
+                    lod.addLevel(solid, i*70);//distances
+                  }
 
-                        const edges0 = new THREE.EdgesGeometry( solid_geom );
-                        const lines0 = new THREE.LineSegments( edges0 );
+                    //this.scene.add(solid);
+                    //this.scene.add(lines0);
+                    this.scene.add( lod );
+                    
+                    const group4 = new THREE.Group();
+                    group4.add( road_strip_betw_pnts([0, 0, 0], [100, 100, 50], 20) );
+                    group4.add( road_strip_betw_pnts([100, 100, 50], [200, 200, 20], 20) );
+                    group4.add( road_strip_betw_pnts([200, 200, 20], [300, 200, 0], 20) );
+                    group4.add( road_strip_betw_pnts([300, 200, 0], [350, 220, 0], 20) );
 
-                        const solid = new THREE.Mesh(
-                          solid_geom, materialCache.glassB
-                          //new THREE.MeshPhongMaterial({ color: 0xaa00ff, wireframe: false })
-                        );
-                        solid.castShadow = true;
-                        solid.material.opacity = 0.75;
-                        solid.position.set( r, r, r );//model units
-                        lines0.position.set( r, r, r );
-                        this.scene.add(solid);
-                        this.scene.add(lines0);
-
-                        const group4 = new THREE.Group();
-                        group4.add( road_strip_betw_pnts([0, 0, 0], [100, 100, 50], 20) );
-                        group4.add( road_strip_betw_pnts([100, 100, 50], [200, 200, 20], 20) );
-                        group4.add( road_strip_betw_pnts([200, 200, 20], [300, 200, 0], 20) );
-                        group4.add( road_strip_betw_pnts([300, 200, 0], [350, 220, 0], 20) );
-
-                        //group4.castShadow = true;//no effect
-                        this.scene.add( group4 );
-
-
+                    //group4.castShadow = true;//done already
+                    this.scene.add( group4 );
                 }
 
-                // Do options
+
+                // TODO: do options according to input data
                 // Ex: axesHelper, planeHelper, 3Arrows
                 const val = 0;
                 switch ( val ) {
                   case 0:
-                        // Code to execute if expression === value1
+                        // Code to execute if expression === 0
                         break;
                   case 1:
-                        // Code to execute if expression === value2
+                        // Code to execute if expression === 1
                         break;
                   default:
                         // Code to execute if no matches are found
@@ -965,6 +1165,14 @@ class ThreeObjCustomLayer {
                 //const colors = [0xFF0000, 0x00FF00, 0x0000FF];
                 //const dirs = [[1,0,0], [0,1,0], [0,0,1]];
                 //const orig = this.originLnglat;
+                /*
+                arrowSpecs={
+                  length: 100,
+                  origVec: [0,0,0],
+                  drawThis: true,
+                  
+                }
+                */
                 const length = 100;
                 const originv = new THREE.Vector3( 0, 0, 0);
 
@@ -983,47 +1191,117 @@ class ThreeObjCustomLayer {
                 const dir3 = new THREE.Vector3(0, 0, 1);
                 const arrow3 = new THREE.ArrowHelper(dir3.normalize(), originv, length, 0x0000ff);
                 group1.add(arrow3);
+                
+                //Finally, add the 3 arrows to the map
                 this.scene.add( group1 );
 
                 //GridHelper: shifted in xyz to reference 3D objects
                 //const grid1 = new THREE.GridHelper(100, 10, 0x0000ff, 0x000000 );
                 /*
-                    const grid_specs = { grid_draw: true,
-                            grid_spec: [100, 10, 0x0000ff, 0x000000],
-                            grid_xyh: [50, 50, 0]
-                        }
+                  //example: horizontal grid
+                  const grid_specs = { drawThis: true,
+                          grid_spec: [100, 10, 0x0000ff, 0x000000],
+                          grid_xyh: [50, 50, 0]
+                      }
                 */
-                if ( this.grid_specs.grid_draw===true ) {
+                
+                if (Array.isArray( this.grid_specs )) {
+                  //several grids to do
+                  this.grid_specs.forEach(specs =>
+                    {
+                      console.log("grids.forEach", specs);
+                      if ( specs.drawThis===true ) {
+                        let so = specs.orientation;
+                        let [po, ro, yo] = [so.pitch, so.roll, so.yaw];
+                        let grid1 = new THREE.GridHelper( ...specs.grid_spec );
+                        grid1.rotation.order = "XYZ";
+                        grid1.rotation.set(po, yo, ro);
+                        grid1.position.set( ...specs.grid_xyh );
+                        this.scene.add( grid1 );
+                      }
+                    });
+                }
+                if ( this.grid_specs.drawThis===true ) {
+                    let so = this.grid_specs.orientation;
+                    let [po, ro, yo] = [so.pitch, so.roll, so.yaw];
                     const grid1 = new THREE.GridHelper( ...this.grid_specs.grid_spec );
-                    grid1.rotateX( Math.PI/2 );//xz-plane grid to horizontal plane
+                    grid1.rotation.order = "XYZ";
+                    grid1.rotation.set(po, yo, ro);
                     grid1.position.set( ...this.grid_specs.grid_xyh );
                     this.scene.add( grid1 );
+                    
+                    /* old code, keep for a while
+                    const grid1 = new THREE.GridHelper( ...this.grid_specs.grid_spec );
+                    grid1.rotateX( Math.PI/2 );//X is to east; get horizontal plane
+                    //grid1.rotateY( Math.PI/10 );//Y is vertical axis; horiz plane rotated around vert axis
+                    grid1.position.set( ...this.grid_specs.grid_xyh );
+                    this.scene.add( grid1 );
+                    */
+                }
+                if ( this.polarGrid_specs.drawThis===true ) {
+                  //let radius=10, sectors=8, rings=4, divs=32; [10, 8, 4, 32];
+                  let sp = this.polarGrid_specs.grid_spec;
+                  let [radius, sectors, rings, divs] = [
+                    sp.radius,
+                    sp.sectors,
+                    sp.rings,
+                    sp.divisions
+                  ];
+                  sp = this.polarGrid_specs;//reuse sp
+                  let [pitch, roll, yaw] = [sp.orientation.pitch, sp.orientation.roll, sp.orientation.yaw];
+                  const pgXYo = new THREE.PolarGridHelper(radius,sectors,rings,divs);//on native-xy plane==vert plane/azim=90
+
+                  pgXYo.rotation.order = "XYZ";
+                  pgXYo.rotation.set(pitch, yaw, roll);
+                  pgXYo.position.set( ...this.polarGrid_specs.grid_xyh );
+                  this.scene.add( pgXYo );
+
+/*
+  //OK  (keep it for future uses)
+  //Some sequeces of rotation are hard to predict
+  //nativeXrot +90; horiz plane
+  //const pgZX = pgXY.clone();
+  //pgZX.rotation.x = Math.PI / 2;
+  //this.scene.add( pgZX );
+  
+  const pgPitch = pgXY.clone();
+  pgPitch.rotation.x = pitch;
+  
+  const pgRoll = pgPitch.clone();
+  pgRoll.rotation.z = roll;//not exactly
+  //this.scene.add( pgRoll );
+  
+  const pgYaw = pgRoll.clone();
+  pgYaw.rotation.y = yaw;
+  this.scene.add( pgYaw );
+*/
+                  
                 }
 
-                /* --- use the MapLibre GL JS map canvas for three.js
-                 this.renderer = new THREE.WebGLRenderer({
-                   canvas: map.getCanvas(),
-                   context: gl,
-                   antialias: true
-                 });
-                 this.renderer.autoClear = false;
-                --- */
+/* ---
+ //take MapLibre canvas for render (not shared)
+ this.renderer = new THREE.WebGLRenderer({
+   canvas: map.getCanvas(),
+   context: gl,
+   antialias: true
+ });
+ this.renderer.autoClear = false;
+--- */
 
-                // Use shared renderer
+                // (Better) Use shared renderer
                 if (!sharedRenderer) {
-                        sharedRenderer = new THREE.WebGLRenderer({
-                                canvas: this.map.getCanvas(),
-                                context: gl,
-                                antialias: true
-                        });
-                        //For shadow casting
-                        sharedRenderer.shadowMap.enabled = true;
-                        sharedRenderer.shadowMap.type = THREE.PCFSoftShadowMap;
-
-                        sharedRenderer.autoClear = false;
+                    sharedRenderer = new THREE.WebGLRenderer({
+                            canvas: this.map.getCanvas(),
+                            context: gl,
+                            antialias: true
+                    });
+                    //For shadow casting
+                    sharedRenderer.shadowMap.enabled = true;
+                    sharedRenderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                    sharedRenderer.autoClear = false;
                 }
                 this.renderer = sharedRenderer;
-                this.renderer.autoClear = false;
+                //this.renderer.autoClear = false;
 
           }
 
@@ -1070,8 +1348,9 @@ class ThreeObjCustomLayer {
 
         /*
           class_usage:
-             new ThreeObjCustomLayer( id, lnglat, height, ...);
-          let myLayer = new ThreeObjCustomLayer( "new-uniq-name", [100, 13], 20, ... );
+             new ThreeObjCustomLayer( id, lnglatH, ...);
+          let myLayer = new ThreeObjCustomLayer( "new-uniq-name", [100, 13, 20], ... );
+          //myLayer.onAdd(this.map, gl), .onRemove(this.map, gl) methods available for house keeping
           map.addLayer( myLayer );
         */
 
